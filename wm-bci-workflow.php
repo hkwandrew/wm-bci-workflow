@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WM BCI Workflow
  * Description: Gravity Forms submission → Approval → Calendar display → Google Sheets sync for BCI community opportunities.
- * Version:     1.1.0
+ * Version:     1.1.1
  * Author:      HKW <andrew@hkw.io>
  * Author URI:  https://hkw.io
  * Text Domain: wm-bci-workflow
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'WM_BCI_WORKFLOW_VERSION', '1.1.0' );
+define( 'WM_BCI_WORKFLOW_VERSION', '1.1.1' );
 define( 'WM_BCI_WORKFLOW_FILE', __FILE__ );
 define( 'WM_BCI_WORKFLOW_DIR', plugin_dir_path( __FILE__ ) );
 define( 'WM_BCI_WORKFLOW_ACTIVE', true );
