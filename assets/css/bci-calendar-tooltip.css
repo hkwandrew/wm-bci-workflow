@@ -1,0 +1,115 @@
+.gform_wrapper .gv-fullcalendar .fc-view-harness { overflow: visible !important; }
+.gform_wrapper .gv-fullcalendar .fc-scrollgrid { border-radius: 12px; overflow: hidden; }
+.gform_wrapper .gv-fullcalendar .fc-event-title { font-weight: 600; }
+
+.tippy-box[data-theme~="gv-calendar"],
+.tippy-tooltip.gv-calendar-theme {
+	max-width: min(21rem, calc(100vw - 2rem));
+	padding: 0;
+	border-radius: 14px;
+	border: 1px solid rgba(0, 73, 102, 0.12);
+	box-shadow: 0 20px 48px rgba(36, 40, 47, 0.16);
+	color: #26323d;
+	z-index: 99999;
+}
+
+.tippy-box[data-theme~="gv-calendar"] .tippy-content,
+.tippy-tooltip.gv-calendar-theme .tippy-content { padding: 0; }
+
+.wm-bci-calendar-tooltip {
+	display: grid;
+	gap: 0.9rem;
+	min-width: min(18rem, calc(100vw - 3rem));
+	max-width: min(21rem, calc(100vw - 2rem));
+	padding: 1rem 1.05rem;
+	line-height: 1.55;
+}
+
+.wm-bci-calendar-tooltip__header {
+	display: grid;
+	gap: 0.35rem;
+	padding-bottom: 0.75rem;
+	border-bottom: 1px solid rgba(204, 212, 220, 0.8);
+}
+
+.wm-bci-calendar-tooltip__eyebrow {
+	margin: 0;
+	color: #238A9A;
+	font-size: 0.7rem;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+
+.wm-bci-calendar-tooltip__title {
+	margin: 0;
+	color: #004966;
+	font-family: "Noto Serif", serif;
+	font-size: 1.2rem;
+	line-height: 1.2;
+}
+
+.wm-bci-calendar-tooltip__meta {
+	display: grid;
+	gap: 0.35rem;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.wm-bci-calendar-tooltip__meta li {
+	margin: 0;
+	font-size: 0.92rem;
+}
+
+.wm-bci-calendar-tooltip__body {
+	display: grid;
+	gap: 0.65rem;
+	font-size: 0.95rem;
+	max-height: min(11rem, calc(100vh - 16rem));
+	overflow: auto;
+	padding-right: 0.35rem;
+}
+
+.wm-bci-calendar-tooltip__body p { 
+	margin: 0; 
+	font-size: 1rem;
+}
+
+.wm-bci-calendar-tooltip__footer {
+	font-size: 0.92rem;
+	margin: 0;
+	padding-top: 0.8rem;
+	border-top: 1px solid rgba(204, 212, 220, 0.8);
+}
+
+.wm-bci-calendar-tooltip__footer a {
+	color: #004966;
+	font-weight: 600;
+	text-decoration: none;
+}
+
+@media (max-width: 640px) {
+	.wm-bci-calendar-tooltip { min-width: auto; }
+}
+
+.fc-daygrid-event-dot {
+	display: none;
+}
+
+.gv-fullcalendar:has([data-tippy-root]) .fc-scrollgrid-section-header.fc-scrollgrid-section-sticky > * {
+	z-index: 0 !important;
+}
+
+.fc-daygrid-block-event .fc-event-time,
+.fc-h-event .fc-event-title {
+	font-weight: 600;
+	padding-block-start: 4px;
+	line-height: 1;
+}
+
+.fc-direction-ltr .fc-daygrid-event.fc-event-end,
+.fc-direction-ltr .fc-daygrid-event.fc-event-start {
+	padding-inline-start: 4px;
+	padding-inline-end: 4px;
+}

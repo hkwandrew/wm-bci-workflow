@@ -1,0 +1,19 @@
+{
+	"name": "watersmeet/wm-bci-workflow",
+	"description": "Gravity Forms submission → Approval → Calendar → Google Sheets sync for BCI community opportunities.",
+	"type": "wordpress-plugin",
+	"license": "GPL-2.0-or-later",
+	"autoload": {
+		"psr-4": {
+			"WatersMeet\\BciWorkflow\\": "src/"
+		}
+	},
+	"require": {
+		"php": ">=7.4"
+	},
+	"require-dev": {
+		"phpunit/phpunit": "^9.5",
+		"wp-coding-standards/wpcs": "^3.0",
+		"dealerdirect/phpcodesniffer-composer-installer": "^1.0"
+	}
+}
