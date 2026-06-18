@@ -14,6 +14,10 @@ final class SettingsPage {
 	private Config $config;
 	private const OPTION_NAME = 'wm_bci_workflow';
 	private const PAGE_SLUG   = 'wm-bci-workflow';
+	private const APP_HANDLE  = 'wm-bci-admin-app';
+
+	/** @var array<string,mixed>|null */
+	private ?array $admin_assets = null;
 
 	public function __construct( Config $config ) {
 		$this->config = $config;
@@ -36,288 +40,79 @@ final class SettingsPage {
 	}
 
 	public function render(): void {
-		echo '<div class="wrap wm-bci-settings-page">';
-		echo '<header class="wm-bci-settings-page__hero">';
-		echo '<div class="wm-bci-settings-page__hero-copy">';
-		echo '<p class="wm-bci-settings-page__eyebrow">' . esc_html__( 'Workflow Settings', 'wm-bci-workflow' ) . '</p>';
+		echo '<div class="wrap">';
 		echo '<h1>' . esc_html( get_admin_page_title() ) . '</h1>';
-		echo '<p class="wm-bci-settings-page__intro">' . esc_html__( 'Manage the approval, publishing, and sync settings that power the BCI community opportunities workflow.', 'wm-bci-workflow' ) . '</p>';
-		echo '</div>';
-		echo '</header>';
-		settings_errors( self::OPTION_NAME );
 
-		echo '<form method="post" action="options.php" class="wm-bci-settings-form">';
+		if ( ! $this->has_admin_assets() ) {
+			$this->render_missing_build_notice();
+			echo '</div>';
+			return;
+		}
+
+		echo '<form method="post" action="options.php">';
 		settings_fields( self::PAGE_SLUG );
-		echo '<div class="wm-bci-settings-grid">';
-		$this->render_registered_section( 'wm_bci_form_config' );
-		$this->render_registered_section( 'wm_bci_field_map' );
-		$this->render_calendar_event_colors_section();
-		$this->render_registered_section( 'wm_bci_google_sync' );
-		echo '</div>';
-		echo '<div class="wm-bci-settings-submit">';
-		submit_button();
-		echo '</div>';
+		echo '<div id="wm-bci-settings-admin-root"></div>';
 		echo '</form>';
 		echo '</div>';
 	}
 
 	public function enqueue_assets( string $hook_suffix ): void {
-		if ( 'settings_page_' . self::PAGE_SLUG !== $hook_suffix ) {
+		if ( 'settings_page_' . self::PAGE_SLUG !== $hook_suffix || ! $this->has_admin_assets() ) {
 			return;
 		}
 
-		$css_file = WM_BCI_WORKFLOW_DIR . 'assets/css/bci-calendar-settings.css';
+		$assets = $this->admin_assets();
 
-		wp_enqueue_style(
-			'wm-bci-admin-settings',
-			plugins_url( 'assets/css/bci-calendar-settings.css', WM_BCI_WORKFLOW_FILE ),
-			array(),
-			file_exists( $css_file ) ? (string) filemtime( $css_file ) : WM_BCI_WORKFLOW_VERSION
+		if ( null === $assets ) {
+			return;
+		}
+
+		wp_enqueue_script(
+			self::APP_HANDLE,
+			$assets['script_src'],
+			$assets['dependencies'],
+			$assets['version'],
+			true
+		);
+
+		if ( ! empty( $assets['style_src'] ) ) {
+			wp_enqueue_style(
+				self::APP_HANDLE,
+				$assets['style_src'],
+				array( 'wp-components' ),
+				$assets['version']
+			);
+		}
+
+		wp_add_inline_script(
+			self::APP_HANDLE,
+			'window.wmBciWorkflowAdmin = ' . wp_json_encode( $this->admin_app_config() ) . ';',
+			'before'
 		);
 	}
 
 	public function register_settings(): void {
-		register_setting( self::PAGE_SLUG, self::OPTION_NAME, array(
-			'type'              => 'array',
-			'sanitize_callback' => array( $this, 'sanitize' ),
-			'default'           => array(),
-		) );
-
-		// Section: Form Configuration.
-		add_settings_section(
-			'wm_bci_form_config',
-			__( 'Form Configuration', 'wm-bci-workflow' ),
-			static function (): void {
-				echo '<p>' . esc_html__( 'Configure which Gravity Forms form and fields power the BCI workflow.', 'wm-bci-workflow' ) . '</p>';
-			},
-			self::PAGE_SLUG
-		);
-
-		$this->add_field( 'form_id', __( 'Form ID', 'wm-bci-workflow' ), 'number', 'wm_bci_form_config', (string) $this->config->form_id() );
-		$this->add_field( 'approval_field_id', __( 'Approval Field ID', 'wm-bci-workflow' ), 'text', 'wm_bci_form_config', $this->config->approval_field_id() );
-		$this->add_field( 'notification_name', __( 'Notification Name', 'wm-bci-workflow' ), 'text', 'wm_bci_form_config', $this->config->notification_name() );
-		$this->add_field(
-			'approval_notification_recipients',
-			__( 'Approval Notification Recipients', 'wm-bci-workflow' ),
-			'textarea',
-			'wm_bci_form_config',
-			$this->config->approval_notification_recipients(),
-			'',
-			__( 'Enter one or more email addresses separated by commas or new lines. When provided, this list overrides the Gravity Forms Send To setting for the approval notification. Leave blank to use the Gravity Forms setting.', 'wm-bci-workflow' )
-		);
-		$this->add_auto_approved_users_field();
-		$this->add_field( 'calendar_page_slug', __( 'Calendar Page Slug', 'wm-bci-workflow' ), 'text', 'wm_bci_form_config', $this->config->calendar_page_slug() );
-		$this->add_field( 'calendar_feed_name', __( 'Calendar Feed Name', 'wm-bci-workflow' ), 'text', 'wm_bci_form_config', $this->config->calendar_feed_name() );
-
-		// Section: Field Mapping.
-		add_settings_section(
-			'wm_bci_field_map',
-			__( 'Field Mapping', 'wm-bci-workflow' ),
-			static function (): void {
-				echo '<p>' . esc_html__( 'Map semantic field names to Gravity Forms field IDs.', 'wm-bci-workflow' ) . '</p>';
-			},
-			self::PAGE_SLUG
-		);
-
-		$field_map = $this->config->field_map();
-		foreach ( Config::default_field_map() as $key => $default ) {
-			$label = ucwords( str_replace( '_', ' ', $key ) );
-			$this->add_field(
-				'field_map_' . $key,
-				$label,
-				'text',
-				'wm_bci_field_map',
-				$field_map[ $key ] ?? $default,
-				'field_map'
-			);
-		}
-
-		// Section: Google Sheets Sync.
-		add_settings_section(
-			'wm_bci_google_sync',
-			__( 'Google Sheets Sync', 'wm-bci-workflow' ),
-			function (): void {
-				echo '<p>' . esc_html__( 'Configure the Google Apps Script sync endpoint. These can also be set as constants in wp-config.php.', 'wm-bci-workflow' ) . '</p>';
-				if ( defined( 'WATERS_MEET_BCI_GOOGLE_SYNC_URL' ) ) {
-					echo '<p class="description">' . esc_html__( 'Note: WATERS_MEET_BCI_GOOGLE_SYNC_URL is defined in wp-config.php and will be used as fallback.', 'wm-bci-workflow' ) . '</p>';
-				}
-			},
-			self::PAGE_SLUG
-		);
-
-		$this->add_field( 'google_sync_url', __( 'Sync Endpoint URL', 'wm-bci-workflow' ), 'url', 'wm_bci_google_sync', $this->config->google_sync_url() );
-		$this->add_field( 'google_sync_secret', __( 'Shared Secret', 'wm-bci-workflow' ), 'password', 'wm_bci_google_sync', '' );
-	}
-
-	private function add_field( string $id, string $label, string $type, string $section, string $value, string $group = '', string $description = '' ): void {
-		add_settings_field(
-			'wm_bci_' . $id,
-			$label,
-			function () use ( $id, $type, $value, $group, $description ): void {
-				$name = $group
-					? sprintf( '%s[%s][%s]', self::OPTION_NAME, $group, str_replace( 'field_map_', '', $id ) )
-					: sprintf( '%s[%s]', self::OPTION_NAME, $id );
-
-				if ( 'textarea' === $type ) {
-					printf(
-						'<textarea name="%1$s" rows="4" class="large-text">%2$s</textarea>',
-						esc_attr( $name ),
-						esc_textarea( $value )
-					);
-				} else {
-					$display_value = 'password' === $type ? '' : esc_attr( $value );
-
-					printf(
-						'<input type="%1$s" name="%2$s" value="%3$s" class="regular-text" />',
-						esc_attr( $type ),
-						esc_attr( $name ),
-						$display_value
-					);
-				}
-
-				if ( 'password' === $type && '' !== $value ) {
-					echo '<p class="description">' . esc_html__( 'A secret is configured. Leave blank to keep the current value.', 'wm-bci-workflow' ) . '</p>';
-				}
-
-				if ( '' !== $description ) {
-					echo '<p class="description">' . esc_html( $description ) . '</p>';
-				}
-			},
+		register_setting(
 			self::PAGE_SLUG,
-			$section
+			self::OPTION_NAME,
+			array(
+				'type'              => 'array',
+				'sanitize_callback' => array( $this, 'sanitize' ),
+				'default'           => array(),
+			)
 		);
-	}
-
-	private function add_auto_approved_users_field(): void {
-		add_settings_field(
-			'wm_bci_auto_approved_user_ids',
-			__( 'Auto-Approved Submitters', 'wm-bci-workflow' ),
-			array( $this, 'render_auto_approved_users_field' ),
-			self::PAGE_SLUG,
-			'wm_bci_form_config'
-		);
-	}
-
-	public function render_auto_approved_users_field(): void {
-		$selected_ids = $this->config->auto_approved_user_ids();
-		$users        = $this->available_users();
-
-		printf(
-			'<input type="hidden" name="%1$s[auto_approved_user_ids_present]" value="1" />',
-			esc_attr( self::OPTION_NAME )
-		);
-
-		if ( empty( $users ) ) {
-			echo '<p class="description">' . esc_html__( 'No WordPress users are available to allowlist.', 'wm-bci-workflow' ) . '</p>';
-			return;
-		}
-
-		echo '<div class="wm-bci-user-select">';
-		printf(
-			'<select name="%1$s[auto_approved_user_ids][]" multiple="multiple" size="8" class="wm-bci-user-select__control">',
-			esc_attr( self::OPTION_NAME )
-		);
-
-		foreach ( $users as $user ) {
-			$user_id = $this->user_id( $user );
-
-			if ( ! $user_id ) {
-				continue;
-			}
-
-			printf(
-				'<option value="%1$d"%2$s>%3$s</option>',
-				$user_id,
-				in_array( $user_id, $selected_ids, true ) ? ' selected="selected"' : '',
-				esc_html( $this->user_label( $user ) )
-			);
-		}
-
-		echo '</select>';
-		echo '<p class="wm-bci-user-select__hint">' . esc_html__( 'Use Command or Control-click to select multiple users.', 'wm-bci-workflow' ) . '</p>';
-		echo '</div>';
-		echo '<p class="description">' . esc_html__( 'Select logged-in WordPress users whose future BCI submissions should be approved automatically. This only applies when Gravity Forms saves the entry created_by user.', 'wm-bci-workflow' ) . '</p>';
-	}
-
-	public function render_calendar_event_colors_section(): void {
-		$choices = $this->opportunity_type_choices();
-		$colors  = $this->config->calendar_event_colors();
-		$palette = Config::calendar_event_palette();
-
-		echo '<section class="wm-bci-settings-section wm-bci-settings-section--calendar">';
-		$this->render_section_header(
-			__( 'Calendar Event Colors', 'wm-bci-workflow' ),
-			__( 'Choose event colors for each opportunity type. Leave a row unselected to use the default GravityCalendar feed color.', 'wm-bci-workflow' )
-		);
-		echo '<div class="wm-bci-settings-card">';
-
-		if ( empty( $choices ) ) {
-			echo '<p class="description">' . esc_html__( 'Opportunity type choices could not be loaded from Gravity Forms. Verify the Form ID and opportunity_type field mapping; existing saved colors will be preserved until this field can be loaded again.', 'wm-bci-workflow' ) . '</p>';
-			echo '</div>';
-			echo '</section>';
-			return;
-		}
-
-		printf(
-			'<input type="hidden" name="%1$s[calendar_event_colors_present]" value="1" />',
-			esc_attr( self::OPTION_NAME )
-		);
-
-		echo '<table class="widefat striped wm-bci-calendar-colors-table" style="max-width: 780px;">';
-		echo '<thead>';
-		echo '<tr>';
-		echo '<th class="wm-bci-calendar-colors-table__type-header" scope="col">' . esc_html__( 'Opportunity Type', 'wm-bci-workflow' ) . '</th>';
-		printf(
-			'<th class="wm-bci-calendar-colors-table__group-header" scope="col" colspan="%d">%s</th>',
-			count( $palette ),
-			esc_html__( 'Calendar Color', 'wm-bci-workflow' )
-		);
-		echo '</tr>';
-		echo '</thead><tbody>';
-
-		foreach ( $choices as $value => $label ) {
-			$selected_color = $colors[ $value ] ?? '';
-			$selected_color = isset( $palette[ $selected_color ] ) ? $selected_color : '';
-			$input_name     = sprintf( '%s[calendar_event_colors][%s]', self::OPTION_NAME, $value );
-
-			echo '<tr>';
-			echo '<th scope="row"><span class="wm-bci-calendar-type-label">' . esc_html( $label ) . '</span>';
-
-			if ( $label !== $value ) {
-				echo '<span class="wm-bci-calendar-type-meta"><code>' . esc_html( $value ) . '</code></span>';
-			}
-
-			echo '</th>';
-
-			foreach ( $palette as $color => $color_label ) {
-				$this->render_calendar_color_option_cell(
-					$input_name,
-					$color,
-					$selected_color,
-					sprintf( '%s: %s (%s)', $label, $color_label, strtoupper( $color ) ),
-					'wm-bci-calendar-palette-swatch',
-					$color
-				);
-			}
-
-			echo '</tr>';
-		}
-
-		echo '</tbody></table>';
-		echo '</div>';
-		echo '</section>';
 	}
 
 	/**
 	 * @param mixed $input
-	 * @return array
+	 * @return array<string,mixed>
 	 */
 	public function sanitize( $input ): array {
 		if ( ! is_array( $input ) ) {
 			return array();
 		}
 
-		$clean = array();
+		$clean    = array();
 		$existing = get_option( self::OPTION_NAME, array() );
 		$existing = is_array( $existing ) ? $existing : array();
 
@@ -375,13 +170,10 @@ final class SettingsPage {
 			$clean['google_sync_url'] = esc_url_raw( $input['google_sync_url'] );
 		}
 
-		// Only update secret if a new one was provided.
 		if ( ! empty( $input['google_sync_secret'] ) ) {
 			$clean['google_sync_secret'] = sanitize_text_field( $input['google_sync_secret'] );
-		} else {
-			if ( ! empty( $existing['google_sync_secret'] ) ) {
-				$clean['google_sync_secret'] = $existing['google_sync_secret'];
-			}
+		} elseif ( ! empty( $existing['google_sync_secret'] ) ) {
+			$clean['google_sync_secret'] = $existing['google_sync_secret'];
 		}
 
 		if ( isset( $input['calendar_event_colors_present'] ) || isset( $input['calendar_event_colors'] ) ) {
@@ -402,8 +194,148 @@ final class SettingsPage {
 		return $clean;
 	}
 
+	private function render_missing_build_notice(): void {
+		echo '<div class="notice notice-warning"><p>';
+		echo esc_html__( 'The BCI settings admin app build is missing. Run npm run build in the wm-bci-workflow plugin before using this screen.', 'wm-bci-workflow' );
+		echo '</p></div>';
+	}
+
+	private function has_admin_assets(): bool {
+		return null !== $this->admin_assets();
+	}
+
 	/**
-	 * @return array<string,string>
+	 * @return array<string,mixed>|null
+	 */
+	private function admin_assets(): ?array {
+		if ( null !== $this->admin_assets ) {
+			return $this->admin_assets;
+		}
+
+		$build_dir = WM_BCI_WORKFLOW_DIR . 'build/admin/';
+		$build_url = plugins_url( 'build/admin/', WM_BCI_WORKFLOW_FILE );
+		$asset_file  = $build_dir . 'index.asset.php';
+		$script_file = $build_dir . 'index.js';
+
+		if ( ! file_exists( $asset_file ) || ! file_exists( $script_file ) ) {
+			$this->admin_assets = null;
+			return null;
+		}
+
+		$asset_data = include $asset_file;
+
+		if ( ! is_array( $asset_data ) ) {
+			$this->admin_assets = null;
+			return null;
+		}
+
+		$style_file = $build_dir . 'style-index.css';
+
+		$this->admin_assets = array(
+			'dependencies' => is_array( $asset_data['dependencies'] ?? null ) ? $asset_data['dependencies'] : array(),
+			'version'      => isset( $asset_data['version'] ) ? (string) $asset_data['version'] : WM_BCI_WORKFLOW_VERSION,
+			'script_src'   => $build_url . 'index.js',
+			'style_src'    => file_exists( $style_file ) ? $build_url . 'style-index.css' : '',
+		);
+
+		return $this->admin_assets;
+	}
+
+	/**
+	 * @return array<string,mixed>
+	 */
+	private function admin_app_config(): array {
+		$field_map = $this->config->field_map();
+		$palette   = array();
+
+		foreach ( Config::calendar_event_palette() as $color => $label ) {
+			$palette[] = array(
+				'color' => $color,
+				'name'  => $label,
+			);
+		}
+
+		return array(
+			'optionName'            => self::OPTION_NAME,
+			'pageSlug'              => self::PAGE_SLUG,
+			'values'                => array(
+				'formId'                         => (string) $this->config->form_id(),
+				'approvalFieldId'                => $this->config->approval_field_id(),
+				'notificationName'               => $this->config->notification_name(),
+				'approvalNotificationRecipients' => $this->config->approval_notification_recipients(),
+				'autoApprovedUserIds'            => $this->config->auto_approved_user_ids(),
+				'calendarPageSlug'               => $this->config->calendar_page_slug(),
+				'calendarFeedName'               => $this->config->calendar_feed_name(),
+				'googleSyncUrl'                  => $this->config->google_sync_url(),
+				'googleSyncSecret'               => '',
+				'hasGoogleSyncSecret'            => '' !== $this->config->google_sync_secret(),
+				'calendarEventColors'            => $this->config->calendar_event_colors(),
+				'fieldMap'                       => $field_map,
+			),
+			'fieldMapFields'        => $this->field_map_fields( $field_map ),
+			'calendarPalette'       => $palette,
+			'opportunityTypeChoices' => $this->opportunity_type_choices(),
+			'users'                 => $this->available_users(),
+		);
+	}
+
+	/**
+	 * @param array<string,string> $field_map
+	 * @return array<int,array{key:string,label:string,value:string}>
+	 */
+	private function field_map_fields( array $field_map ): array {
+		$fields = array();
+
+		foreach ( Config::default_field_map() as $key => $default ) {
+			$fields[] = array(
+				'key'   => $key,
+				'label' => ucwords( str_replace( '_', ' ', $key ) ),
+				'value' => $field_map[ $key ] ?? $default,
+			);
+		}
+
+		return $fields;
+	}
+
+	/**
+	 * @return array<int,array{id:int,label:string}>
+	 */
+	private function available_users(): array {
+		if ( ! function_exists( 'get_users' ) ) {
+			return array();
+		}
+
+		$users = get_users(
+			array(
+				'orderby' => 'display_name',
+				'order'   => 'ASC',
+			)
+		);
+
+		if ( ! is_array( $users ) ) {
+			return array();
+		}
+
+		$normalized = array();
+
+		foreach ( $users as $user ) {
+			$user_id = $this->user_id( $user );
+
+			if ( ! $user_id ) {
+				continue;
+			}
+
+			$normalized[] = array(
+				'id'    => $user_id,
+				'label' => $this->user_label( $user ),
+			);
+		}
+
+		return $normalized;
+	}
+
+	/**
+	 * @return array<int,array{value:string,label:string}>
 	 */
 	private function opportunity_type_choices(): array {
 		if ( ! class_exists( 'GFAPI' ) ) {
@@ -445,7 +377,16 @@ final class SettingsPage {
 				$normalized['Other'] = 'Other';
 			}
 
-			return $normalized;
+			$output = array();
+
+			foreach ( $normalized as $value => $label ) {
+				$output[] = array(
+					'value' => $value,
+					'label' => $label,
+				);
+			}
+
+			return $output;
 		}
 
 		return array();
@@ -459,18 +400,18 @@ final class SettingsPage {
 		$normalized = array();
 
 		foreach ( $choices as $choice ) {
-			$label = '';
-			$value = '';
+			$label           = '';
+			$value           = '';
 			$is_other_choice = false;
 
 			if ( is_array( $choice ) ) {
 				$is_other_choice = ! empty( $choice['isOtherChoice'] ) || 'gf_other_choice' === ( $choice['value'] ?? '' );
-				$label = trim( (string) ( $choice['text'] ?? '' ) );
-				$value = trim( (string) ( $choice['value'] ?? $label ) );
+				$label           = trim( (string) ( $choice['text'] ?? '' ) );
+				$value           = trim( (string) ( $choice['value'] ?? $label ) );
 			} elseif ( is_object( $choice ) ) {
 				$is_other_choice = ! empty( $choice->isOtherChoice ) || ( isset( $choice->value ) && 'gf_other_choice' === $choice->value );
-				$label = isset( $choice->text ) ? trim( (string) $choice->text ) : '';
-				$value = isset( $choice->value ) ? trim( (string) $choice->value ) : $label;
+				$label           = isset( $choice->text ) ? trim( (string) $choice->text ) : '';
+				$value           = isset( $choice->value ) ? trim( (string) $choice->value ) : $label;
 			}
 
 			if ( $is_other_choice || '' === $label ) {
@@ -522,24 +463,6 @@ final class SettingsPage {
 		}
 
 		return $valid;
-	}
-
-	/**
-	 * @return array<int,mixed>
-	 */
-	private function available_users(): array {
-		if ( ! function_exists( 'get_users' ) ) {
-			return array();
-		}
-
-		$users = get_users(
-			array(
-				'orderby' => 'display_name',
-				'order'   => 'ASC',
-			)
-		);
-
-		return is_array( $users ) ? $users : array();
 	}
 
 	/**
@@ -602,181 +525,5 @@ final class SettingsPage {
 		}
 
 		return false;
-	}
-
-	private function render_registered_section( string $section_id ): void {
-		global $wp_settings_sections;
-
-		if ( ! isset( $wp_settings_sections[ self::PAGE_SLUG ][ $section_id ] ) ) {
-			return;
-		}
-
-		$section = $wp_settings_sections[ self::PAGE_SLUG ][ $section_id ];
-		$title   = ! empty( $section['title'] ) ? (string) $section['title'] : '';
-		$intro   = $this->capture_section_description( $section );
-
-		if ( 'wm_bci_form_config' === $section_id ) {
-			$this->render_form_config_section( $title, $intro );
-			return;
-		}
-
-		if ( 'wm_bci_field_map' === $section_id ) {
-			$this->render_field_mapping_section( $title, $intro );
-			return;
-		}
-
-		$this->render_standard_section( $section_id, $title, $intro );
-	}
-
-	private function render_form_config_section( string $title, string $intro ): void {
-		echo '<section class="wm-bci-settings-section wm-bci-settings-section--form-config">';
-		$this->render_section_header( $title, $intro );
-		echo '<div class="wm-bci-settings-card">';
-		$this->render_field_group(
-			'wm_bci_form_config',
-			__( 'Workflow Setup', 'wm-bci-workflow' ),
-			__( 'Connect the BCI workflow to the right Gravity Forms identifiers and notification trigger.', 'wm-bci-workflow' ),
-			array(
-				'wm_bci_form_id',
-				'wm_bci_approval_field_id',
-				'wm_bci_notification_name',
-			)
-		);
-		$this->render_field_group(
-			'wm_bci_form_config',
-			__( 'Approvals', 'wm-bci-workflow' ),
-			__( 'Control who gets review emails and which logged-in users bypass manual approval.', 'wm-bci-workflow' ),
-			array(
-				'wm_bci_approval_notification_recipients',
-				'wm_bci_auto_approved_user_ids',
-			)
-		);
-		$this->render_field_group(
-			'wm_bci_form_config',
-			__( 'Publishing', 'wm-bci-workflow' ),
-			__( 'Set the public calendar destination and feed label used by the BCI workflow.', 'wm-bci-workflow' ),
-			array(
-				'wm_bci_calendar_page_slug',
-				'wm_bci_calendar_feed_name',
-			)
-		);
-		echo '</div>';
-		echo '</section>';
-	}
-
-	private function render_field_mapping_section( string $title, string $intro ): void {
-		echo '<section class="wm-bci-settings-section wm-bci-settings-section--advanced">';
-		echo '<details class="wm-bci-settings-collapsible">';
-		echo '<summary class="wm-bci-settings-collapsible__summary">';
-		echo '<span class="wm-bci-settings-collapsible__title">' . esc_html( $title ) . '</span>';
-		echo '<span class="wm-bci-settings-badge">' . esc_html__( 'Advanced', 'wm-bci-workflow' ) . '</span>';
-		echo '</summary>';
-		echo '<div class="wm-bci-settings-card wm-bci-settings-card--compact">';
-
-		if ( '' !== $intro ) {
-			echo '<div class="wm-bci-settings-note">' . wp_kses_post( $intro ) . '</div>';
-		}
-
-		echo '<p class="wm-bci-settings-inline-help">' . esc_html__( 'Only change these IDs when the underlying Gravity Forms form changes.', 'wm-bci-workflow' ) . '</p>';
-		echo '<table class="form-table wm-bci-settings-table wm-bci-settings-table--mapping" role="presentation">';
-		$this->render_field_rows(
-			'wm_bci_field_map',
-			array_keys( $this->registered_field_ids( 'wm_bci_field_map' ) )
-		);
-		echo '</table>';
-		echo '</div>';
-		echo '</details>';
-		echo '</section>';
-	}
-
-	private function render_standard_section( string $section_id, string $title, string $intro ): void {
-		echo '<section class="wm-bci-settings-section wm-bci-settings-section--' . esc_attr( str_replace( '_', '-', $section_id ) ) . '">';
-		$this->render_section_header( $title, $intro );
-		echo '<div class="wm-bci-settings-card">';
-		echo '<table class="form-table wm-bci-settings-table" role="presentation">';
-		$this->render_field_rows( $section_id, array_keys( $this->registered_field_ids( $section_id ) ) );
-		echo '</table>';
-		echo '</div>';
-		echo '</section>';
-	}
-
-	private function render_section_header( string $title, string $description = '' ): void {
-		echo '<div class="wm-bci-settings-section__header">';
-		echo '<h2>' . esc_html( $title ) . '</h2>';
-
-		if ( '' !== $description ) {
-			echo '<div class="wm-bci-settings-section__description">' . wp_kses_post( $description ) . '</div>';
-		}
-
-		echo '</div>';
-	}
-
-	private function render_field_group( string $section_id, string $title, string $description, array $field_ids ): void {
-		echo '<section class="wm-bci-settings-subsection">';
-		echo '<div class="wm-bci-settings-subsection__header">';
-		echo '<h3>' . esc_html( $title ) . '</h3>';
-		echo '<p>' . esc_html( $description ) . '</p>';
-		echo '</div>';
-		echo '<table class="form-table wm-bci-settings-table" role="presentation">';
-		$this->render_field_rows( $section_id, $field_ids );
-		echo '</table>';
-		echo '</section>';
-	}
-
-	/**
-	 * @return array<string,array<string,mixed>>
-	 */
-	private function registered_field_ids( string $section_id ): array {
-		global $wp_settings_fields;
-
-		$fields = $wp_settings_fields[ self::PAGE_SLUG ][ $section_id ] ?? array();
-
-		return is_array( $fields ) ? $fields : array();
-	}
-
-	private function render_field_rows( string $section_id, array $field_ids ): void {
-		$fields = $this->registered_field_ids( $section_id );
-
-		foreach ( $field_ids as $field_id ) {
-			if ( ! isset( $fields[ $field_id ] ) ) {
-				continue;
-			}
-
-			$field = $fields[ $field_id ];
-
-			echo '<tr class="wm-bci-settings-table__row">';
-			echo '<th scope="row">' . esc_html( (string) $field['title'] ) . '</th>';
-			echo '<td>';
-			call_user_func( $field['callback'], $field['args'] ?? array() );
-			echo '</td>';
-			echo '</tr>';
-		}
-	}
-
-	/**
-	 * @param array<string,mixed> $section
-	 */
-	private function capture_section_description( array $section ): string {
-		if ( empty( $section['callback'] ) || ! is_callable( $section['callback'] ) ) {
-			return '';
-		}
-
-		ob_start();
-		call_user_func( $section['callback'], $section );
-		return trim( (string) ob_get_clean() );
-	}
-
-	private function render_calendar_color_option_cell( string $input_name, string $value, string $selected_color, string $label, string $swatch_class, string $color = '' ): void {
-		echo '<td class="wm-bci-calendar-colors-table__option-cell">';
-		printf(
-			'<label class="wm-bci-calendar-palette-option" title="%1$s"><input type="radio" name="%2$s" value="%3$s" %4$s /><span class="%5$s"%6$s aria-hidden="true"></span><span class="screen-reader-text">%1$s</span></label>',
-			esc_attr( $label ),
-			esc_attr( $input_name ),
-			esc_attr( $value ),
-			checked( $value, $selected_color, false ),
-			esc_attr( $swatch_class ),
-			'' !== $color ? ' style="background-color:' . esc_attr( $color ) . ';"' : ''
-		);
-		echo '</td>';
 	}
 }

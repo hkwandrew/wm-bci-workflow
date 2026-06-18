@@ -20,13 +20,9 @@ if ( ! defined( 'WM_BCI_WORKFLOW_DIR' ) ) {
 
 $GLOBALS['wm_bci_test_options']   = array();
 $GLOBALS['wm_bci_settings_errors'] = array();
-$GLOBALS['wm_bci_enqueued_styles'] = array();
 $GLOBALS['wm_bci_test_entry_meta'] = array();
 $GLOBALS['wm_bci_test_users']      = array();
 $GLOBALS['wm_bci_updated_entry_fields'] = array();
-$GLOBALS['wm_bci_test_settings_fields'] = array();
-$GLOBALS['wp_settings_sections']   = array();
-$GLOBALS['wp_settings_fields']     = array();
 
 if ( ! function_exists( '__' ) ) {
 	function __( string $text ): string {
@@ -127,27 +123,6 @@ if ( ! function_exists( 'register_setting' ) ) {
 	}
 }
 
-if ( ! function_exists( 'add_settings_section' ) ) {
-	function add_settings_section( string $id, string $title, callable $callback, string $page ): void {
-		$GLOBALS['wp_settings_sections'][ $page ][ $id ] = array(
-			'id'       => $id,
-			'title'    => $title,
-			'callback' => $callback,
-		);
-	}
-}
-
-if ( ! function_exists( 'add_settings_field' ) ) {
-	function add_settings_field( string $id, string $title, callable $callback, string $page, string $section = 'default', array $args = array() ): void {
-		$GLOBALS['wp_settings_fields'][ $page ][ $section ][ $id ] = array(
-			'id'       => $id,
-			'title'    => $title,
-			'callback' => $callback,
-			'args'     => $args,
-		);
-	}
-}
-
 if ( ! function_exists( 'rgar' ) ) {
 	function rgar( array $array, string $key ) {
 		return $array[ $key ] ?? null;
@@ -217,62 +192,6 @@ if ( ! function_exists( 'admin_url' ) ) {
 if ( ! function_exists( 'plugins_url' ) ) {
 	function plugins_url( string $path = '', string $plugin = '' ): string {
 		return 'https://example.com/wp-content/plugins/wm-bci-workflow/' . ltrim( $path, '/' );
-	}
-}
-
-if ( ! function_exists( 'wp_enqueue_style' ) ) {
-	function wp_enqueue_style( string $handle, string $src = '', array $deps = array(), $ver = false, string $media = 'all' ): void {
-		$GLOBALS['wm_bci_enqueued_styles'][] = compact( 'handle', 'src', 'deps', 'ver', 'media' );
-	}
-}
-
-if ( ! function_exists( 'get_admin_page_title' ) ) {
-	function get_admin_page_title(): string {
-		return 'BCI Workflow';
-	}
-}
-
-if ( ! function_exists( 'settings_errors' ) ) {
-	function settings_errors( string $setting = '' ): void {
-	}
-}
-
-if ( ! function_exists( 'settings_fields' ) ) {
-	function settings_fields( string $option_group ): void {
-		$GLOBALS['wm_bci_test_settings_fields'][] = $option_group;
-	}
-}
-
-if ( ! function_exists( 'submit_button' ) ) {
-	function submit_button( string $text = 'Save Changes', string $type = 'primary', string $name = 'submit', bool $wrap = true ): void {
-		$button = sprintf(
-			'<button type="submit" class="button button-%1$s" name="%2$s">%3$s</button>',
-			esc_attr( $type ),
-			esc_attr( $name ),
-			esc_html( $text )
-		);
-
-		if ( $wrap ) {
-			echo '<p class="submit">' . $button . '</p>';
-			return;
-		}
-
-		echo $button;
-	}
-}
-
-if ( ! function_exists( 'do_settings_fields' ) ) {
-	function do_settings_fields( string $page, string $section ): void {
-		$fields = $GLOBALS['wp_settings_fields'][ $page ][ $section ] ?? array();
-
-		foreach ( $fields as $field ) {
-			echo '<tr>';
-			echo '<th scope="row">' . esc_html( (string) $field['title'] ) . '</th>';
-			echo '<td>';
-			call_user_func( $field['callback'], $field['args'] ?? array() );
-			echo '</td>';
-			echo '</tr>';
-		}
 	}
 }
 

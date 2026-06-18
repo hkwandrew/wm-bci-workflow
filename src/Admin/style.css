@@ -1,0 +1,110 @@
+.wm-bci-settings-app {
+	display: grid;
+	gap: 24px;
+	margin-top: 20px;
+}
+
+.wm-bci-settings-app__grid {
+	display: grid;
+	gap: 20px;
+}
+
+.wm-bci-settings-app__card {
+	box-sizing: border-box;
+}
+
+.wm-bci-settings-app__section-header h2 {
+	margin: 0;
+	font-size: 18px;
+	line-height: 1.35;
+}
+
+.wm-bci-settings-app__section-header p {
+	margin: 6px 0 0;
+	color: #50575e;
+	line-height: 1.6;
+}
+
+.wm-bci-settings-app__group + .wm-bci-settings-app__group {
+	margin-top: 24px;
+	padding-top: 24px;
+	border-top: 1px solid #e0e0e0;
+}
+
+.wm-bci-settings-app__group h3 {
+	margin: 0 0 16px;
+	font-size: 15px;
+	line-height: 1.4;
+}
+
+.wm-bci-settings-app__color-rows {
+	display: grid;
+	gap: 20px;
+}
+
+.wm-bci-settings-app__color-row {
+	display: grid;
+	gap: 12px;
+	padding-bottom: 18px;
+	border-bottom: 1px solid #f0f0f0;
+}
+
+.wm-bci-settings-app__color-row:last-child {
+	padding-bottom: 0;
+	border-bottom: 0;
+}
+
+.wm-bci-settings-app__color-copy {
+	display: grid;
+	gap: 4px;
+}
+
+.wm-bci-settings-app__color-copy span {
+	color: #646970;
+	font-size: 12px;
+	line-height: 1.4;
+}
+
+.wm-bci-settings-app__color-picker {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 12px;
+}
+
+.wm-bci-settings-app__panel {
+	border: 1px solid #dcdcde;
+	border-radius: 2px;
+	background: #fff;
+}
+
+.wm-bci-settings-app__panel-copy {
+	margin: 0 0 16px;
+	color: #50575e;
+	line-height: 1.6;
+}
+
+.wm-bci-settings-app__mapping-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+	gap: 16px;
+}
+
+.wm-bci-settings-app__actions {
+	display: flex;
+	justify-content: flex-start;
+}
+
+.wm-bci-settings-app__hidden-inputs {
+	display: none;
+}
+
+@media (max-width: 782px) {
+	.wm-bci-settings-app__mapping-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.wm-bci-settings-app__color-picker {
+		align-items: flex-start;
+	}
+}
